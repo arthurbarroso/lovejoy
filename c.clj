@@ -41,3 +41,12 @@
         acc)) [] items))
 
 (my-filter odd? '(1 2 3 4 5 6))
+
+(reduce (fn [accumulator item]
+          (+ accumulator 1)) 0 '(1 2 3 3 1))
+
+#(reduce (fn [acc item]
+            (cons item acc)) '() %)
+
+(reduce (fn [acc item]
+          (+ acc 1)) 0 '(1 2 3))
