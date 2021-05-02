@@ -27,18 +27,16 @@
 
 (defn count-letters [word letter]
   (reduce c-compare 0
-     word))
+          word))
 
 (count-letters "chiclete" "c")
 
-
-
 (defn my-filter [predicate items]
   (reduce
-    (fn [acc item]
-      (if (predicate item)
-        (conj acc item)
-        acc)) [] items))
+   (fn [acc item]
+     (if (predicate item)
+       (conj acc item)
+       acc)) [] items))
 
 (my-filter odd? '(1 2 3 4 5 6))
 
@@ -46,7 +44,10 @@
           (+ accumulator 1)) 0 '(1 2 3 3 1))
 
 #(reduce (fn [acc item]
-            (cons item acc)) '() %)
+           (cons item acc)) '() %)
 
 (reduce (fn [acc item]
           (+ acc 1)) 0 '(1 2 3))
+
+{:david-bowie {:songs [{:name "The man who mapped the world"
+                        :year 2021}]}}
