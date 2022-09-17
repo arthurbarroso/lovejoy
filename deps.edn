@@ -1,6 +1,9 @@
 {:deps
  {org.clojure/data.csv {:mvn/version "0.1.4"}
-  semantic-csv/semantic-csv {:mvn/version "0.2.1-alpha1"}}
+  semantic-csv/semantic-csv {:mvn/version "0.2.1-alpha1"}
+  org.clojure/core.async {:mvn/version "1.5.648"}}
+
+ :paths ["." "bliss"]
 
  :aliases {:repl {:main-opts ["-m" "nrepl.cmdline"
                               "--interactive"
