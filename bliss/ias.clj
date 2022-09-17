@@ -20,7 +20,7 @@
 (defn should-print-signal? [signal-key valid-signals]
   (if (get valid-signals signal-key)
     (str (symbol->str (-> valid-signals (get signal-key) :symbols)) " ")
-    "0 "))
+    "000 "))
 
 (defn pretty-printer [signal-map signals]
   (let [printer (map (fn [[signal-key _]]
