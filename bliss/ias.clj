@@ -10,9 +10,9 @@
   {:a "A"
    :b "B"
    :c "C"
-   :not-a "~A"
-   :not-b "~B"
-   :not-c "~C"})
+   :not-a "!A"
+   :not-b "!B"
+   :not-c "!C"})
 
 (defn symbol->str [symbols]
   (apply str (map #(get symbol-conversion-map %) symbols)))
@@ -33,3 +33,25 @@
               "\n Lines: \n"
               (apply str (first lines)) "\n"
               (apply str (second lines))))))
+
+(defn print-original-map-vals [original-map]
+  (println "Starting map:")
+  (doall (->> original-map
+              (map second)
+              (map :value)
+              (map #(str "000" %))
+              vec
+              (partition 4)
+              (map #(println %))))
+  (println "\n"))
+
+(defn print-original-map-symbols [original-map]
+  (println "Starting map:")
+  (doall (->> original-map
+              (map second)
+              (map :symbols)
+              (map #(symbol->str %))
+              vec
+              (partition 4)
+              (map #(println %))))
+  (println "\n"))

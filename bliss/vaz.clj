@@ -1,6 +1,5 @@
 (ns bliss.vaz
-  (:require [clojure.zip :as zip]
-            [bliss.ias :as ias]))
+  (:require [bliss.ias :as ias]))
 
 (def example-map
   {;;first-row
@@ -9,10 +8,20 @@
    "200" {:x 2 :y 0 :z 1 :value 0 :symbols [:not-a :b :c]}
    "300" {:x 3 :y 0 :z 0 :value 1 :symbols [:not-a :b :not-c]}
    ;; second-row
-   "010" {:x 0 :y 1 :z 0 :value 0 :symbols [:a :not-bc]}
+   "010" {:x 0 :y 1 :z 0 :value 0 :symbols [:a :not-b :not-c]}
    "110" {:x 1 :y 1 :z 0 :value 1 :symbols [:a :not-b :c]}
    "210" {:x 2 :y 1 :z 0 :value 1 :symbols [:a :b :c]}
    "310" {:x 3 :y 1 :z 0 :value 1 :symbols [:a :b :not-c]}})
+
+;; example-map
+;; 000 000 000 111
+;; 000 111 111 111
+;;
+;; 000 100 200 300
+;; 010 110 210 310
+
+;; !A!B!C <> !A!BC <> !ABC <> !AB!C
+;; A!B!C  <> A!B!C <> ABC  <> AB!C
 
 (defn find-directions [signal-map]
   (let [previous-dir (:dir signal-map)
@@ -58,10 +67,6 @@
             []
             possible-directions)))
 
-(defn is-in? [collection coordinates]
-  (let [{:keys [x y]} coordinates]
-    (some #(and (= x (:x %)) (= y (:y %))) collection)))
-
 (defn find-in-direction [directions {:keys [x y]}]
   (filter
    (fn [direction]
@@ -83,9 +88,6 @@
                  [])
          (filter (fn [[k item]]
                    (when item) (= 1 (-> item :value)))))))
-
-(defn reversed-draw [direction mapft]
-  (draw-directions mapft [{:dir direction}]))
 
 (defn go-through-signal [signal signal-maps]
   (->> signal
@@ -136,8 +138,7 @@
 
 (defn update-current-state [raw-state new-state
                             previous-state-key]
-  (let [current-state-path (first (find-current-state previous-state-key raw-state))
-        current-state (get-in raw-state [current-state-path])]
+  (let [current-state-path (first (find-current-state previous-state-key raw-state))]
     (update-in raw-state
                (conj (first (find-current-state previous-state-key raw-state))
                      :neighbors)
@@ -161,7 +162,7 @@
                                :neighbors)
           unvisited-neighbors (extract-unvisited-neighbors result)]
       (if (empty? signal-neighbors)
-        (if (not (empty? unvisited-neighbors))
+        (if (seq unvisited-neighbors)
           (let [[first-unvisited-n & rest-unvisited-n] unvisited-neighbors
                 updated-first-u-neighbor (apply-visited [first-unvisited-n]
                                                         true)]
@@ -204,17 +205,28 @@
         (recur (conj result (assoc (dissoc node-map :neighbors) :key node-key))
                node-neighbor)))))
 
-(defn split-lines
+(defn split-lines-old
   "Takes in a parsed signal, traverses it's neighbors and group them into lists"
   [signal-and-neighbors]
   (->> signal-and-neighbors
        :neighbors
-       (map loop-neighbor)
+       (map loop-neighbor)))
         ;; the only case possible for a signal map to have 3-length lines is
         ;; when all of it's spaces are value:1, which can be treated beforehand.
        ;; (filter #(not (odd? (count %))))
-       (filter #(not (= 1 (count %))))
-       first))
+       ;; (filter #(not (= 1 (count %))))
+       ;; first))
+
+(defn split-lines
+  "Takes in a parsed signal, traverses it's neighbors and group them into lists"
+  [{:keys [x y z value] :as signal-and-neighbors}]
+  (->> signal-and-neighbors
+       :neighbors
+       (map loop-neighbor)
+       (map (fn [n-list]
+              (conj n-list {:x x :y y :z z
+                            :dir (-> n-list first :dir)
+                            :value value :key (str x y z)})))))
 
 (defn reattach-symbols
   "Attaches the :symbol key back to a processed neighbor in a line"
@@ -222,25 +234,61 @@
   (map (fn [line] (assoc line :symbols (get-in signal-maps [(:key line) :symbols])))
        line-seq))
 
+(defn line->directions [line]
+  (reduce
+   (fn [acc {:keys [x y z]}]
+     (assoc acc (str x y z) {:x x :y y :z z}))
+   {}
+   line))
+
+(defn compare-lines [lines-to-compare]
+  (loop [lines lines-to-compare
+         lines-map {}]
+    (if (seq lines)
+      (let [line (first lines)]
+        (recur (rest lines)
+               (merge lines-map
+                      (line->directions line))))
+      lines-map)))
+
+(defn remove-if-0 [signal-list]
+  (if (not (some #(= 0 %) (map :value signal-list)))
+    signal-list
+    nil))
+
+(defn solve [signal-map]
+  (->> signal-map
+       (map #(split-lines (loop-through-signals % signal-map)))
+       (filter #(seq %))
+       (apply concat)
+       (map remove-if-0)
+       (filter #(not (nil? %)))
+       (filter #(not (odd? (count %))))
+       (map #(reattach-symbols signal-map %))
+       (map #(ias/pretty-printer signal-map %))))
+
 (comment
+  (ias/print-original-map-symbols example-map)
+  (ias/print-original-map-vals example-map)
   (->> example-map
        (map #(-> %
                  (loop-through-signals example-map)
                  split-lines))
+       (filter #(seq %))
+       (apply concat)
+       (map remove-if-0)
        (filter #(not (nil? %)))
+       (filter #(not (odd? (count %))))
        (map #(reattach-symbols example-map %))
-       (map #(ias/pretty-printer example-map %))))
-       ;; clojure.pprint/pprint))
-;; in a 3x2 grid there is a maximum of two unvisited neighbors/node
-;; this happens because this will only check adjacent nodes that are in the same "direction"
-;; as the direction the original node took to get to it's first neighbor
-;; this means a node can't go left then down, for an example.
-;; since we end up going through each ndoe individually, there is no need to think about the
-;; unvisited nodes of a node's neighbors - these will be visited when the neighbor nodes are processed.
+       (map #(ias/pretty-printer example-map %)))
+  (solve example-map))
 ;;
+
 ;; next steps:
-;; - [] map through the `map` definition instead of going through a single key.
+;; - [x] map through the `map` definition instead of going through a single key.
 ;; - [x] create a function that generates lines from valid nodes
-;; - [] create a fn that checks for nodes that are next to each other and can combine groups out of lines
-;;      (so we can have 2x2, 3x2 stuff -- is that possible anyways? do not remember)
-;; then figure out the best lines/groups, which should be somewhat simple
+;; - [x] figure out the best lines/groups
+;;       - this means going through the lines, creatin a map from
+;;       them and then check if the next lines have these as neighbors
+;;       (this means at least 2ˆn neighbors of the line must be neighbors
+;;       with one of the line directions inside the map)
