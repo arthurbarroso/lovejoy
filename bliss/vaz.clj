@@ -1,14 +1,15 @@
 (ns bliss.vaz
-  (:require [bliss.ias :as ias]))
+  (:require [bliss.ias :as ias]
+            [clojure.string :as str]))
 
 (def example-map
   {;;first-row
    "000" {:x 0 :y 0 :z 0 :value 0 :symbols [:not-a :not-b :not-c]}
-   "100" {:x 1 :y 0 :z 0 :value 0 :symbols [:not-a :not-b :c]}
-   "200" {:x 2 :y 0 :z 1 :value 0 :symbols [:not-a :b :c]}
+   "100" {:x 1 :y 0 :z 0 :value 1 :symbols [:not-a :not-b :c]}
+   "200" {:x 2 :y 0 :z 0 :value 1 :symbols [:not-a :b :c]}
    "300" {:x 3 :y 0 :z 0 :value 1 :symbols [:not-a :b :not-c]}
    ;; second-row
-   "010" {:x 0 :y 1 :z 0 :value 0 :symbols [:a :not-b :not-c]}
+   "010" {:x 0 :y 1 :z 0 :value 1 :symbols [:a :not-b :not-c]}
    "110" {:x 1 :y 1 :z 0 :value 1 :symbols [:a :not-b :c]}
    "210" {:x 2 :y 1 :z 0 :value 1 :symbols [:a :b :c]}
    "310" {:x 3 :y 1 :z 0 :value 1 :symbols [:a :b :not-c]}})
@@ -138,11 +139,10 @@
 
 (defn update-current-state [raw-state new-state
                             previous-state-key]
-  (let [current-state-path (first (find-current-state previous-state-key raw-state))]
-    (update-in raw-state
-               (conj (first (find-current-state previous-state-key raw-state))
-                     :neighbors)
-               #(merge % new-state))))
+  (update-in raw-state
+             (conj (first (find-current-state previous-state-key raw-state))
+                   :neighbors)
+             #(merge % new-state)))
 
 (defn apply-visited [elements visited?]
   (map (fn [[k v]] [k (assoc v :visited visited?)])
@@ -151,7 +151,7 @@
 (defn extract-unvisited-neighbors [node]
   (->> node
        :neighbors
-       (filter (fn [[k v]] (not (:visited v))))))
+       (filter (fn [[_k v]] (not (:visited v))))))
 
 (defn loop-through-signals [signal signal-map]
   (loop [result {}
@@ -163,7 +163,7 @@
           unvisited-neighbors (extract-unvisited-neighbors result)]
       (if (empty? signal-neighbors)
         (if (seq unvisited-neighbors)
-          (let [[first-unvisited-n & rest-unvisited-n] unvisited-neighbors
+          (let [[first-unvisited-n & _rest-unvisited-n] unvisited-neighbors
                 updated-first-u-neighbor (apply-visited [first-unvisited-n]
                                                         true)]
             (recur (update result :neighbors #(merge %
@@ -205,18 +205,6 @@
         (recur (conj result (assoc (dissoc node-map :neighbors) :key node-key))
                node-neighbor)))))
 
-(defn split-lines-old
-  "Takes in a parsed signal, traverses it's neighbors and group them into lists"
-  [signal-and-neighbors]
-  (->> signal-and-neighbors
-       :neighbors
-       (map loop-neighbor)))
-        ;; the only case possible for a signal map to have 3-length lines is
-        ;; when all of it's spaces are value:1, which can be treated beforehand.
-       ;; (filter #(not (odd? (count %))))
-       ;; (filter #(not (= 1 (count %))))
-       ;; first))
-
 (defn split-lines
   "Takes in a parsed signal, traverses it's neighbors and group them into lists"
   [{:keys [x y z value] :as signal-and-neighbors}]
@@ -234,27 +222,49 @@
   (map (fn [line] (assoc line :symbols (get-in signal-maps [(:key line) :symbols])))
        line-seq))
 
-(defn line->directions [line]
-  (reduce
-   (fn [acc {:keys [x y z]}]
-     (assoc acc (str x y z) {:x x :y y :z z}))
-   {}
-   line))
-
-(defn compare-lines [lines-to-compare]
-  (loop [lines lines-to-compare
-         lines-map {}]
-    (if (seq lines)
-      (let [line (first lines)]
-        (recur (rest lines)
-               (merge lines-map
-                      (line->directions line))))
-      lines-map)))
-
 (defn remove-if-0 [signal-list]
   (if (not (some #(= 0 %) (map :value signal-list)))
     signal-list
     nil))
+;; [{:x 2, :y 0, :z 0, :dir :up, :value 1, :visited true, :key 200, :symbols [:not-a :b :c]}
+;;  {:x 2, :y 1, :z 0, :dir :up, :value 1, :key 210, :symbols [:a :b :c]}]
+;; no reduce eu checo se o item eh uma lista e se sim eu percorro a lista dnv...
+;; q saco, mas funciona. sendo uma lista eu transformo lista em mapa e dou merge no
+;; accumulator
+
+(defn direction->axis [node]
+  (if (contains? [:up :down] (:dir node))
+    :horizontal
+    :vertical))
+
+(defn reduce-inline [node-list]
+  (reduce (fn [accumulator node]
+            (if (empty? accumulator)
+              (assoc accumulator :start (:key node))
+              (assoc accumulator :end (:key node)
+                     :dir (direction->axis node))))
+          {}
+          node-list))
+
+(defn lines->pos [lines]
+  (->> lines
+       (sort-by :key)
+       reduce-inline))
+
+;; next steps:
+;; - [x] map through the `map` definition instead of going through a single key.
+;; - [x] create a function that generates lines from valid nodes
+;; - [x] figure out the best lines/groups
+;;       - this means going through the lines, creatin a map from
+;;       them and then check if the next lines have these as neighbors
+;;       (this means at least 2ˆn neighbors of the line must be neighbors
+;;       with one of the line directions inside the map)
+;; horizontal:
+;; [{:start key :end key2}] or [{:start key :end key3}]
+;; ->> key2 eh key - x, key3 eh key + x
+;; vertical:
+;; [{:start key :end key2}] or [{:start key :end key3}]
+;; ->> key2 eh key - y, key3 eh key + y
 
 (defn solve [signal-map]
   (->> signal-map
@@ -266,6 +276,74 @@
        (filter #(not (odd? (count %))))
        (map #(reattach-symbols signal-map %))
        (map #(ias/pretty-printer signal-map %))))
+
+(def bb
+  '([{:x 2 :y 0 :z 0 :dir :up :value 1 :visited true :key "200" :symbols [:not-a :b :c]}
+     {:x 2 :y 1 :z 0 :dir :up :value 1 :key "210" :symbols [:a :b :c]}]))
+
+(defn extract-key-positions [key]
+  (let [[x y z] key]
+    [(Integer/parseInt (str x))
+     (Integer/parseInt (str y))
+     (Integer/parseInt (str z))]))
+
+;; i do not need to check the nodes between start and end because
+;; the line is mounted based off of that
+(defn search-neighbor-lines [{:keys [start end dir]}]
+  (let [[start-x start-y start-z] (extract-key-positions start)
+        [end-x end-y end-z] (extract-key-positions end)]
+    (cond
+            ;; go left
+      (and (= :vertical dir)
+           (not (= 0 start-x)))
+      {:start (str (- start-x 1) start-y start-z)
+       :end (str (- end-x 1) end-y end-z)
+       :dir dir}
+            ;; go right
+      (and (= :vertical dir)
+           (not (= 3 start-x)))
+      {:start (str (+ start-x 1) start-y start-z)
+       :end (str (+ end-x 1) end-y end-z)
+       :dir dir}
+            ;; go down
+      (and (= :horizontal dir)
+           (not (= 1 start-y)))
+      {:start (str start-x (+ start-y 1) start-z)
+       :end (str end-x (+ end-y 1) end-z)
+       :dir dir}
+            ;; go up
+      (and (= :horizontal dir)
+           (not (= 0 start-y)))
+      {:start (str start-x (- start-y 1) start-z)
+       :end (str end-x (- end-y 1) end-z)
+       :dir dir}
+            ;; go down full line
+      (and (= :horizontal dir)
+           (= 0 start-x)
+           (= 3 end-x)
+           (= 0 start-y))
+      {:start (str start-x (+ start-y 1) start-z)
+       :end (str end-x (+ end-y 1) end-z)
+       :dir dir}
+            ;; go up full line
+      (and (= :horizontal dir)
+           (= 0 start-x)
+           (= 3 end-x)
+           (= 1 start-y))
+      {:start (str start-x (- start-y 1) start-z)
+       :end (str end-x (- end-y 1) end-z)
+       :dir dir})))
+
+(defn check-line-neighbors
+  "groups lines that are neighbors"
+  [lines]
+  (map
+   (fn [line]
+     (let [line-neighbor (search-neighbor-lines line)
+           contained (first (filter #(= line-neighbor %) (vec lines)))]
+       (if contained
+         [line contained]
+         [line]))) lines))
 
 (comment
   (ias/print-original-map-symbols example-map)
@@ -280,15 +358,16 @@
        (filter #(not (nil? %)))
        (filter #(not (odd? (count %))))
        (map #(reattach-symbols example-map %))
-       (map #(ias/pretty-printer example-map %)))
-  (solve example-map))
-;;
+       ;; (map #(ias/pretty-printer example-map %))
+       (map lines->pos)
+       distinct
+       check-line-neighbors
+       clojure.pprint/pprint))
+  ;; (solve example-map))
 
-;; next steps:
-;; - [x] map through the `map` definition instead of going through a single key.
-;; - [x] create a function that generates lines from valid nodes
-;; - [x] figure out the best lines/groups
-;;       - this means going through the lines, creatin a map from
-;;       them and then check if the next lines have these as neighbors
-;;       (this means at least 2ˆn neighbors of the line must be neighbors
-;;       with one of the line directions inside the map)
+(comment
+  (contains? [{:start "100" :end "110" :dir :vertical}] {:start "100"
+                                                         :end "110"
+                                                         :dir :vertical})
+  (some #(= % {:start "100" :end "110" :dir :vertical})
+        [{:start "100" :end "110" :dir :vertical}]))

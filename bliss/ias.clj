@@ -32,7 +32,8 @@
     (println (str
               "\n Lines: \n"
               (apply str (first lines)) "\n"
-              (apply str (second lines))))))
+              (apply str (second lines))))
+    signals))
 
 (defn print-original-map-vals [original-map]
   (println "Starting map:")
